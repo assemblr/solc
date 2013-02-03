@@ -64,7 +64,7 @@ void solc_compile(char* source, FILE* out) {
         current_obj++;
     }
     for (int i = 0; i < top_level_objs; i++) {
-        write("    sol_obj_evaluate((SolObject) list_%i);\n", top_level_ids[i]);
+        write("    sol_obj_release(sol_obj_evaluate(sol_obj_retain((SolObject) list_%i)));\n", top_level_ids[i]);
     }
     write_footer();
 }
