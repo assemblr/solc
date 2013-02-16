@@ -1,5 +1,6 @@
 
 #include <stdio.h>
+#include <stdint.h>
 #include <ctype.h>
 #include <string.h>
 #include <stdlib.h>
@@ -7,11 +8,16 @@
 #include "solgen.h"
 #include "solcobj.h"
 
-#define write(...) fprintf(stream, __VA_ARGS__)
+#define write(value, size) fwrite(&(value), (size), 1, bin_stream)
+#define writes(value, size) fwrite((value), (size), 1, bin_stream)
+#define writec(value) fputc((value), bin_stream)
+
+#define cprint(...) fprintf(stream, __VA_ARGS__)
 
 static char* expression;
 static char* expr_end;
 static size_t expr_len;
+static FILE* bin_stream;
 static FILE* stream;
 
 static int free_list_id = 0;
@@ -26,18 +32,20 @@ SolCToken read_token();
 SolCString read_string();
 SolCNumber read_number();
 
-void write_header();
-void write_footer();
-
 void write_obj(SolCObject obj);
 void write_list(SolCList list);
 void write_token(SolCToken token);
 void write_string(SolCString string);
 void write_number(SolCNumber number);
 
-void solc_compile(char* source, FILE* out) {
+void cprint_header();
+void cprint_footer();
+void cprint_data();
+
+void solc_compile(char* source, FILE* bin_out, FILE* out) {
     // set up processor
     expression = source;
+    bin_stream = bin_out;
     stream = out;
     prep_expression();
     expr_len = strlen(expression);
@@ -54,19 +62,20 @@ void solc_compile(char* source, FILE* out) {
         }
     }
     
+    // write magic number
+    writec('S'); writec('O'); writec('L'); writec('B'); writec('I'); writec('N');
     // begin code generation
-    write_header();
     SolCListNode top_level_node = top_level->first;
-    int* top_level_ids = malloc(sizeof(int) * top_level_objs);
-    for (int current_obj = 0; top_level_node != NULL; top_level_node = top_level_node->next) {
-        top_level_ids[current_obj] = free_list_id;
+    for (; top_level_node != NULL; top_level_node = top_level_node->next) {
         write_obj(top_level_node->obj);
-        current_obj++;
     }
-    for (int i = 0; i < top_level_objs; i++) {
-        write("    sol_obj_release(sol_obj_evaluate(sol_obj_retain((SolObject) list_%i)));\n", top_level_ids[i]);
-    }
-    write_footer();
+    writec(0x0);
+    fseek(bin_stream, 0, SEEK_SET);
+    
+    // print c file
+    cprint_header();
+    cprint_data();
+    cprint_footer();
 }
 
 void prep_expression() {
@@ -239,19 +248,6 @@ char is_delimiter(char c) {
     return isspace(c) || strchr(delimiters, c) != NULL;
 }
 
-void write_header() {
-    write("#include <sol/runtime.h>\n");
-    write("#include <stdbool.h>\n\n");
-    write("int main(int argc, char** argv) {\n");
-    write("    sol_runtime_init();\n");
-}
-
-void write_footer() {
-    write("    sol_runtime_destroy();\n");
-    write("    return 0;\n");
-    write("}\n");
-}
-
 void write_obj(SolCObject obj) {
     switch (obj->type_id) {
         case SOLC_TYPE_LIST:
@@ -272,19 +268,20 @@ void write_obj(SolCObject obj) {
 void write_list(SolCList list) {
     int list_id = free_list_id;
     free_list_id++;
-    write("    SolList list_%i = sol_list_create(%s);\n", list_id, list->object_mode ? "true" : "false");
-    write("    list_%i->freezeCount = %i;\n", list_id, list->freeze_count);
+    writec(0x2);
+    writec(list->object_mode);
+    list->freeze_count++;
+    write(list->freeze_count, sizeof(list->freeze_count));
+    list->freeze_count--;
+    uint32_t length = 0;
     SolCListNode node = list->first;
     for (; node != NULL; node = node->next) {
-        SolCObject obj = node->obj;
-        if (obj->type_id == SOLC_TYPE_LIST) {
-            write_obj(obj);
-            write("    sol_list_add_obj(list_%i, (SolObject) list_%i);\n", list_id, last_list_id);
-        } else {
-            write("    sol_list_add_obj(list_%i, (SolObject) ", list_id);
-            write_obj(obj);
-            write(");\n");
-        }
+        length++;
+    }
+    write(length, sizeof(length));
+    node = list->first;
+    for (; node != NULL; node = node->next) {
+        write_obj(node->obj);
     }
     last_list_id = list_id;
 }
@@ -293,21 +290,56 @@ void write_token(SolCToken token) {
     // handle special cases
     // handle data types
     if (!strcmp(token->identifier, "true")) {
-        write("sol_bool_create(true)");
+        writec(0x7);
+        writec(1);
         return;
     }
     if (!strcmp(token->identifier, "false")) {
-        write("sol_bool_create(false)");
+        writec(0x7);
+        writec(1);
         return;
     }
     // otherwise write a token
-    write("sol_token_create(\"%s\")", token->identifier);
+    writec(0x4);
+    uint32_t length = strlen(token->identifier);
+    write(length, sizeof(length));
+    writes(token->identifier, sizeof(*token->identifier) * length);
 }
 
 void write_string(SolCString string) {
-    write("sol_string_create(\"%s\")", string->value);
+    writec(0x6);
+    uint64_t length = strlen(string->value);
+    write(length, sizeof(length));
+    writes(string->value, sizeof(*string->value) * length);
 }
 
 void write_number(SolCNumber number) {
-    write("sol_num_create(%lf)", number->value);
+    writec(0x5);
+    write(number->value, sizeof(number->value));
+}
+
+void cprint_header() {
+    cprint("#include <sol/runtime.h>\n\n");
+    cprint("unsigned char data[] = {");
+}
+
+void cprint_footer() {
+    cprint("};\n\n");
+    cprint("int main(int argc, char** argv) {\n");
+    cprint("    sol_runtime_init();\n");
+    cprint("    sol_runtime_execute(data);\n");
+    cprint("    sol_runtime_destroy();\n");
+    cprint("    return 0;\n");
+    cprint("}\n");
+}
+
+void cprint_data() {
+    int ch;
+    int i = 0;
+    while ((ch = fgetc(bin_stream)) != EOF) {
+        if (i++ % 12 == 0)
+            fputs ("\n  ", stream);
+        fprintf (stream, "0x%02X,", ch);
+    }
+    fputc ('\n', stream);
 }

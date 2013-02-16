@@ -9,6 +9,7 @@
 #define	SOLCOBJ_H
 
 #include <stdbool.h>
+#include <stdint.h>
 
 typedef enum solc_type {
     SOLC_TYPE_LIST,
@@ -34,7 +35,7 @@ typedef struct solc_list {
     bool object_mode;
     SolCListNode first;
     SolCListNode last;
-    int freeze_count;
+    uint32_t freeze_count;
 } solc_list;
 typedef solc_list* SolCList;
 

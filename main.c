@@ -42,18 +42,25 @@ int main(int argc, char** argv) {
         in_contents[in_size] = '\0';
         fclose(in);
         
+        char* bin_out_name = file_modify_extension(file_strip_path(argv[1]), "solbin");
+        FILE* bin_out = fopen(bin_out_name, "w+");
         char* out_name = file_modify_extension(file_strip_path(argv[1]), "c");
         FILE* out = fopen(out_name, "w");
-        free(out_name);
+        if (bin_out == NULL) {
+            fprintf(stderr, "File '%s' could not be written.\n", bin_out_name);
+            return -1;
+        }
         if (out == NULL) {
             fprintf(stderr, "File '%s' could not be written.\n", out_name);
             return -1;
         }
+        free(bin_out_name);
+        free(out_name);
         
         // process file
         // printf("File successfully read:\n%s", in_contents);
         fprintf(out, "// generated from %s\n\n", file_strip_path(argv[1]));
-        solc_compile(in_contents, out);
+        solc_compile(in_contents, bin_out, out);
         
         // free original string
         free(in_contents);

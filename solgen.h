@@ -8,7 +8,7 @@
 #ifndef SOLGEN_H
 #define	SOLGEN_H
 
-void solc_compile(char* source, FILE* out);
+void solc_compile(char* source, FILE* bin_out, FILE* out);
 
 #endif	/* SOLGEN_H */
 
