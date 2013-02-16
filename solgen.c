@@ -28,7 +28,7 @@ char is_delimiter(char c);
 
 SolCObject read_obj();
 SolCList read_list(bool object_mode, int freeze, char bracketed);
-SolCToken read_token();
+SolCObject read_token();
 SolCString read_string();
 SolCNumber read_number();
 
@@ -128,16 +128,16 @@ SolCObject read_obj() {
                     expression++;
                     continue;
                 }
-                return (SolCObject) read_token();
+                return read_token();
             case '@': // OBJECT MODE STATEMENTS
                 if (*(expression + 1) == '[') {
                     obj_modifier = true;
                     expression++;
                     continue;
                 }
-                return (SolCObject) read_token();
+                return read_token();
             default: // TOKENS
-                return (SolCObject) read_token();
+                return read_token();
         }
     }
     return NULL;
@@ -166,7 +166,7 @@ SolCList read_list(bool object_mode, int freeze, char bracketed) {
     return list;
 }
 
-SolCToken read_token() {
+SolCObject read_token() {
     char buff[1024];
     char* current = buff;
     for (; !is_delimiter(*expression); expression++) {
@@ -177,7 +177,35 @@ SolCToken read_token() {
     int result_len = strlen(buff);
     char* result_str = memcpy(malloc(result_len) + 1, buff, result_len);
     result_str[result_len] = '\0';
-    return solc_create_token(result_str);
+    // use object '@' access shorthand
+    char* at_pos = strchr(result_str, '@');
+    if (at_pos != NULL && (at_pos - result_str > 0 || (at_pos = strchr(result_str + 1, '@')) != NULL)) {
+        SolCList result_list = solc_create_list(true);
+        result_list->freeze_count = -1;
+        char* token = strtok(result_str, "@");
+        // handle tokens that start with '@'
+        if (*result_str == '@') {
+            char* new_token = malloc(sizeof(*token) * (strlen(token) + 1));
+            new_token[0] = '@';
+            new_token[1] = '\0';
+            token = strcat(new_token, token);
+        }
+        solc_list_add(result_list, (SolCObject) solc_create_token(token));
+        solc_list_add(result_list, (SolCObject) solc_create_token("get"));
+        token = strtok(NULL, "@");
+        solc_list_add(result_list, (SolCObject) solc_create_token(token));
+        while ((token = strtok(NULL, "@")) != NULL) {
+            SolCList old_list = result_list;
+            result_list = solc_create_list(true);
+            result_list->freeze_count = -1;
+            solc_list_add(result_list, (SolCObject) old_list);
+            solc_list_add(result_list, (SolCObject) solc_create_token("get"));
+            solc_list_add(result_list, (SolCObject) solc_create_token(token));
+        }
+        return (SolCObject) result_list;
+    } else {
+        return (SolCObject) solc_create_token(result_str);
+    }
 }
 
 SolCString read_string() {
