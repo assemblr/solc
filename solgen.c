@@ -253,7 +253,8 @@ SolCString read_string() {
                     return solc_create_string(result_str);
                 case '\\':
                     escaped = 1;
-                    break;
+                    expression++;
+                    continue;
                 default:
                     *current = *expression;
             }
