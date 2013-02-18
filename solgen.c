@@ -32,6 +32,7 @@ SolCObject read_token();
 SolCString read_string();
 SolCNumber read_number();
 
+void write_length(uint64_t length);
 void write_obj(SolCObject obj);
 void write_list(SolCList list);
 void write_token(SolCToken token);
@@ -277,6 +278,22 @@ char is_delimiter(char c) {
     return isspace(c) || strchr(delimiters, c) != NULL;
 }
 
+void write_length(uint64_t length) {
+    if (length <= 0xF) {
+        char data = length + ((char) 0x1 << 0x4);
+        writec(data);
+    } else if (length <= 0xFFF) {
+        uint16_t data = length + ((uint16_t) 0x2 << 0xC);
+        write(data, sizeof(data));
+    } else if (length <= 0xFFFFF) {
+        uint32_t data = length + ((uint32_t) 0x3 << 0x1C);
+        write(data, sizeof(data));
+    } else if (length <= 0xFFFFFFF) {
+        uint64_t data = length + ((uint64_t) 0x4 << 0x3C);
+        write(data, sizeof(data));
+    }
+}
+
 void write_obj(SolCObject obj) {
     switch (obj->type_id) {
         case SOLC_TYPE_LIST:
@@ -300,14 +317,14 @@ void write_list(SolCList list) {
     writec(0x2);
     writec(list->object_mode);
     list->freeze_count++;
-    write(list->freeze_count, sizeof(list->freeze_count));
+    write_length(list->freeze_count);
     list->freeze_count--;
-    uint32_t length = 0;
+    uint64_t length = 0;
     SolCListNode node = list->first;
     for (; node != NULL; node = node->next) {
         length++;
     }
-    write(length, sizeof(length));
+    write_length(length);
     node = list->first;
     for (; node != NULL; node = node->next) {
         write_obj(node->obj);
@@ -330,15 +347,15 @@ void write_token(SolCToken token) {
     }
     // otherwise write a token
     writec(0x4);
-    uint32_t length = strlen(token->identifier);
-    write(length, sizeof(length));
+    uint64_t length = strlen(token->identifier);
+    write_length(length);
     writes(token->identifier, sizeof(*token->identifier) * length);
 }
 
 void write_string(SolCString string) {
     writec(0x6);
     uint64_t length = strlen(string->value);
-    write(length, sizeof(length));
+    write_length(length);
     writes(string->value, sizeof(*string->value) * length);
 }
 
