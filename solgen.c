@@ -5,6 +5,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <arpa/inet.h>
 #include "solgen.h"
 #include "solcobj.h"
 
@@ -31,6 +32,9 @@ SolCList read_list(bool object_mode, int freeze, char bracketed);
 SolCObject read_token();
 SolCString read_string();
 SolCNumber read_number();
+
+uint64_t htonll(uint64_t value);
+uint64_t ntohll(uint64_t value);
 
 void write_length(uint64_t length);
 void write_obj(SolCObject obj);
@@ -278,18 +282,43 @@ char is_delimiter(char c) {
     return isspace(c) || strchr(delimiters, c) != NULL;
 }
 
+uint64_t htonll(uint64_t value) {
+    uint16_t num = 1;
+    if (*(char *)&num == 1) {
+        uint32_t high_part = htonl((uint32_t) (value >> 32));
+        uint32_t low_part = htonl((uint32_t) (value & 0xFFFFFFFFLL));
+        return (((uint64_t) low_part) << 32) | high_part;
+    } else {
+        return value;
+    }
+}
+
+uint64_t ntohll(uint64_t value) {
+    uint16_t num = 1;
+    if (*(char *)&num == 1) {
+        uint32_t high_part = ntohl((uint32_t) (value >> 32));
+        uint32_t low_part = ntohl((uint32_t) (value & 0xFFFFFFFFLL));
+        return (((uint64_t) low_part) << 32) | high_part;
+    } else {
+        return value;
+    }
+}
+
 void write_length(uint64_t length) {
     if (length <= 0xF) {
         char data = length + ((char) 0x1 << 0x4);
         writec(data);
     } else if (length <= 0xFFF) {
         uint16_t data = length + ((uint16_t) 0x2 << 0xC);
+        data = htons(data);
         write(data, sizeof(data));
     } else if (length <= 0xFFFFF) {
         uint32_t data = length + ((uint32_t) 0x3 << 0x1C);
+        data = htonl(data);
         write(data, sizeof(data));
     } else if (length <= 0xFFFFFFF) {
         uint64_t data = length + ((uint64_t) 0x4 << 0x3C);
+        data = htonll(data);
         write(data, sizeof(data));
     }
 }
