@@ -5,6 +5,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <math.h>
+#include <float.h>
 #include <arpa/inet.h>
 #include "solgen.h"
 #include "solcobj.h"
@@ -390,7 +392,21 @@ void write_string(SolCString string) {
 
 void write_number(SolCNumber number) {
     writec(0x5);
-    write(number->value, sizeof(number->value));
+    // handle sign/exponent sign
+    char sign = 0x0;
+    // get the exponent
+    int exp;
+    double base = frexp(fabs(number->value), &exp);
+    if (exp >= 0) sign |= 0x1;
+    if (number->value >= 0) sign |= 0x2;
+    exp = abs(exp);
+    // get the base
+    base *= pow(FLT_RADIX, DBL_MANT_DIG);
+    uint64_t base_data = htonll(base);
+    // write the data
+    writec(sign);
+    write(base_data, sizeof(uint64_t));
+    write_length(exp);
 }
 
 void cprint_header() {
