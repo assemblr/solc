@@ -5,7 +5,7 @@
 
 char* file_strip_path(char* file) {
     char* slash = strrchr(file, '/');
-    if (file == NULL) return slash;
+    if (slash == NULL) return file;
     return slash + 1;
 }
 

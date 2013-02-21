@@ -80,9 +80,11 @@ void solc_compile(char* source, FILE* bin_out, FILE* out) {
     fseek(bin_stream, 0, SEEK_SET);
     
     // print c file
-    cprint_header();
-    cprint_data();
-    cprint_footer();
+    if (out) {
+        cprint_header();
+        cprint_data();
+        cprint_footer();
+    }
 }
 
 void prep_expression() {
