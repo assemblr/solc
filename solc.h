@@ -8,11 +8,17 @@
 #ifndef SOLC_H
 #define	SOLC_H
 
-char* file_strip_path(char* file);
+#include <stdlib.h>
+#include <stdio.h>
+#include <sol/runtime.h>
 
-char* file_get_name(char* file);
+SolList solc_parse(char* source);
+SolList solc_parse_f(FILE* source);
 
-char* file_modify_extension(char* file, char* ext);
+unsigned char* solc_emit(SolList source, off_t* size);
+
+unsigned char* solc_compile(char* source, off_t* size);
+unsigned char* solc_compile_f(FILE* source, off_t* size);
 
 #endif	/* SOLC_H */
 

@@ -8,10 +8,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
-#include <sys/stat.h>
+#include <string.h>
 
-#include "solc.h"
+#include <sol/runtime.h>
+#include <solc/solc.h>
 #include "solgen.h"
+
+char* file_strip_path(char* file);
+char* file_get_name(char* file);
+char* file_modify_extension(char* file, char* ext);
 
 /*
  * 
@@ -47,7 +52,7 @@ int main(int argc, char** argv) {
     
     // handle invalid input
     if (argc == 0 || !filename) {
-        printf("usage:  solc filename\n");
+        printf("usage:  solc [-b|-c] filename\n");
         return EXIT_FAILURE;
     }
     if (flag_b && flag_c) {
@@ -55,59 +60,64 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
     }
     
+    // handle sol runtime information
+    sol_runtime_init();
+    
     // begin compilation
     FILE* in = fopen(filename, "r");
     if (in == NULL) {
         fprintf(stderr, "File '%s' could not be read.\n", filename);
-        return -1;
+        return EXIT_FAILURE;
     }
     
-    // get file size
-    struct stat st;
-    if (stat(filename, &st) != 0) {
-        fprintf(stderr, "Error determining size of file.\n");
-        return -1;
-    }
-    off_t in_size = st.st_size;
-    
-    // read file contents
-    char* in_contents = malloc(in_size + 1);
-    if (fread(in_contents, in_size, 1, in) != 1) {
-        fprintf(stderr, "Error reading file.\n");
-        return -1;
-    }
-    in_contents[in_size] = '\0';
+    // get and write the binary file
+    off_t bin_size;
+    unsigned char* bin = solc_compile_f(in, &bin_size);
     fclose(in);
-    
-    char* bin_out_name = file_modify_extension(file_strip_path(filename), "solbin");
-    FILE* bin_out = fopen(bin_out_name, "w+");
-    char* out_name = file_modify_extension(file_strip_path(filename), "c");
-    FILE* out = flag_b ? NULL : fopen(out_name, "w");
-    if (bin_out == NULL) {
-        fprintf(stderr, "File '%s' could not be written.\n", bin_out_name);
-        return EXIT_FAILURE;
-    }
-    if (!flag_b && out == NULL) {
-        fprintf(stderr, "File '%s' could not be written.\n", out_name);
-        return EXIT_FAILURE;
+    if (!flag_c) {
+        char* bin_out_name = file_modify_extension(file_strip_path(filename), "solbin");
+        FILE* bin_out = fopen(bin_out_name, "wb");
+        fwrite(bin, bin_size, 1, bin_out);
+        fclose(bin_out);
+        free(bin_out_name);
     }
     
-    // process file
-    if (out) fprintf(out, "// generated from %s\n\n", file_strip_path(filename));
-    solc_compile(in_contents, bin_out, out);
-    fclose(bin_out);
-    if (out) fclose(out);
-    
-    // remove bin file
-    if (flag_c) {
-        remove(bin_out_name);
+    // write C source file
+    if (!flag_b) {
+        char* out_name = file_modify_extension(file_strip_path(filename), "c");
+        FILE* out = flag_b ? NULL : fopen(out_name, "w");
+        solc_generate_c(bin, bin_size, out);
+        fclose(out);
+        free(out_name);
     }
     
-    free(bin_out_name);
-    free(out_name);
+    sol_runtime_destroy();
     
-    // free original string
-    free(in_contents);
     return EXIT_SUCCESS;
+}
+
+char* file_strip_path(char* file) {
+    char* slash = strrchr(file, '/');
+    if (slash == NULL) return file;
+    return slash + 1;
+}
+
+char* file_get_name(char* file) {
+    const char* dot = strrchr(file, '.');
+    if (dot == NULL) dot = file + strlen(file);
+    char* name = malloc(dot - file + 1);
+    memcpy(name, file, dot - file);
+    name[dot - file + 1] = '\0';
+    return name;
+}
+
+char* file_modify_extension(char* file, char* ext) {
+    const char* dot = strrchr(file, '.');
+    if (dot == NULL) dot = file + strlen(file);
+    char* name = malloc(dot - file + strlen(ext) + 2);
+    memcpy(name, file, dot - file);
+    name[dot - file] = '.';
+    memcpy(name + (dot - file) + 1, ext, strlen(ext) + 1);
+    return name;
 }
 

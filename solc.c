@@ -1,29 +1,16 @@
 
-#include <string.h>
-#include <stdlib.h>
+#include "solc.h"
 
-
-char* file_strip_path(char* file) {
-    char* slash = strrchr(file, '/');
-    if (slash == NULL) return file;
-    return slash + 1;
+unsigned char* solc_compile(char* source, off_t* size) {
+    SolList data = solc_parse(source);
+    unsigned char* ret = solc_emit(data, size);
+    sol_obj_release((SolObject) data);
+    return ret;
 }
 
-char* file_get_name(char* file) {
-    const char* dot = strrchr(file, '.');
-    if (dot == NULL) dot = file + strlen(file);
-    char* name = malloc(dot - file + 1);
-    memcpy(name, file, dot - file);
-    name[dot - file + 1] = '\0';
-    return name;
-}
-
-char* file_modify_extension(char* file, char* ext) {
-    const char* dot = strrchr(file, '.');
-    if (dot == NULL) dot = file + strlen(file);
-    char* name = malloc(dot - file + strlen(ext) + 2);
-    memcpy(name, file, dot - file);
-    name[dot - file] = '.';
-    memcpy(name + (dot - file) + 1, ext, strlen(ext) + 1);
-    return name;
+unsigned char* solc_compile_f(FILE* source, off_t* size) {
+    SolList data = solc_parse_f(source);
+    unsigned char* ret = solc_emit(data, size);
+    sol_obj_release((SolObject) data);
+    return ret;
 }
