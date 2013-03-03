@@ -13,6 +13,9 @@
 #include <sol/runtime.h>
 #include <solc/solc.h>
 #include "solgen.h"
+#include "linenoise.h"
+
+void solc_repl_activate(void);
 
 char* file_strip_path(char* file);
 char* file_get_name(char* file);
@@ -24,7 +27,7 @@ char* file_modify_extension(char* file, char* ext);
 int main(int argc, char** argv) {
     // parse command-line flags
     char* filename;
-    bool flag_b, flag_c;
+    bool flag_b, flag_c, flag_i;
     for (int i = 1; i < argc; i++) {
         char* arg = argv[i];
         if (*arg == '-') {
@@ -39,6 +42,9 @@ int main(int argc, char** argv) {
                         case 'c':
                             flag_c = true;
                             break;
+                        case 'i':
+                            flag_i = true;
+                            break;
                         default:
                             fprintf(stderr, "Unrecognized flag -%c.\n", *arg);
                             break;
@@ -50,9 +56,15 @@ int main(int argc, char** argv) {
         }
     }
     
+    // handle REPL interactive mode
+    if (flag_i) {
+        solc_repl_activate();
+        return EXIT_SUCCESS;
+    }
+    
     // handle invalid input
     if (argc == 0 || !filename) {
-        printf("usage:  solc [-b|-c] filename\n");
+        printf("usage:  solc [-i] [-b|-c] filename\n");
         return EXIT_FAILURE;
     }
     if (flag_b && flag_c) {
@@ -94,6 +106,27 @@ int main(int argc, char** argv) {
     sol_runtime_destroy();
     
     return EXIT_SUCCESS;
+}
+
+void solc_repl_activate(void) {
+    sol_runtime_init();
+    char* line;
+    while ((line = linenoise("> "))) {
+        if (line[0] != '\0') {
+            // compile and execute input
+            unsigned char* bytecode = solc_compile(line, NULL);
+            SolObject result = sol_runtime_execute(bytecode);
+            // print output
+            char* result_str = sol_obj_to_string(result);
+            sol_obj_release(result);
+            printf("%s\n", result_str);
+            free(result_str);
+            free(bytecode);
+            
+            linenoiseHistoryAdd(line);
+        }
+        free(line);
+    }
 }
 
 char* file_strip_path(char* file) {

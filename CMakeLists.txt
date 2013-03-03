@@ -1,7 +1,6 @@
 # libsol cmake build file
 cmake_minimum_required(VERSION 2.6)
 project(solc C)
-# link_directories("${CMAKE_INSTALL_PREFIX}/lib")
 include_directories("${CMAKE_INSTALL_PREFIX}/include")
 
 # build for C99
@@ -21,11 +20,13 @@ set (LIBSOL_PRIVATE_HEADERS
     )
 set (SOLC_SOURCES
     main.c
-    solgen.c)
+    solgen.c
+    linenoise.c)
 set (SOLC_PUBLIC_HEADERS
     )
 set (SOLC_PRIVATE_HEADERS
-    solgen.h)
+    solgen.h
+    linenoise.h)
 
 # create targets
 add_library(libsolc SHARED ${LIBSOLC_SOURCES} ${LIBSOLC_PUBLIC_HEADERS} ${LIBSOLC_PRIVATE_HEADERS})
