@@ -134,7 +134,7 @@ SolList read_list(bool object_mode, int freeze, bool bracketed) {
             continue;
         }
         // handle list termination
-        if (*src == (bracketed ? ']' : '(')) {
+        if (*src == (bracketed ? ']' : ')')) {
             src++;
             return list;
         }
