@@ -95,6 +95,7 @@ SolObject read_object() {
             case '[': // STATEMENTS
                 if (func_modifier_active) {
                     SolList func_list = (SolList) sol_obj_retain((SolObject) sol_list_create(false));
+                    func_list->freezeCount = -1;
                     sol_list_add_obj(func_list, (SolObject) sol_token_create("^"));
                     sol_list_add_obj(func_list, (SolObject) sol_list_create(false));
                     sol_list_add_obj(func_list, (SolObject) read_list(obj_modifier_active, -1, true));
