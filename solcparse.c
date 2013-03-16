@@ -244,7 +244,7 @@ SolString read_string() {
         } else {
             switch (*src) {
                 case '"': {
-                    size_t result_len = strlen(buff);
+                    size_t result_len = buff_pos - buff;
                     char* result = memcpy(malloc(result_len + 1), buff, result_len);
                     result[result_len] = '\0';
                     free(buff);
