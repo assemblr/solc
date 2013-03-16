@@ -79,7 +79,7 @@ SolObject read_object() {
         }
         
         // process number literals
-        if (isdigit(*src)) {
+        if (isdigit(*src) || (*src == '-' && isdigit(*(src + 1)))) {
             return (SolObject) read_number();
         }
         
