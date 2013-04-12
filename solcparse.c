@@ -1,9 +1,17 @@
 
+#include "config.h"
+
 #include "solc.h"
 
 #include <string.h>
 #include <ctype.h>
 #include <sys/stat.h>
+
+#if defined(HAVE_PCRE_H)
+#include <pcre.h>
+#else
+#include <regex.h>
+#endif
 
 static char* src;
 
@@ -166,39 +174,108 @@ SolObject read_token() {
     result[result_len] = '\0';
     free(buff);
     
-    // handle object '@' getter shorthand
-    char* at_pos;
-    if ((at_pos = strchr(result, '@')) && (at_pos - result > 0 || (at_pos = strchr(result + 1, '@')))) {
-        SolList result_list = (SolList) sol_obj_retain((SolObject) sol_list_create(true));
-        result_list->freezeCount = -1;
-        char* token = strtok(result, "@");
-        // handle tokens that start with '@'
-        if (*result == '@') {
-            char* new_token = malloc(sizeof(*token) * (strlen(token) + 1));
-            new_token[0] = '@';
-            new_token[1] = '\0';
-            token = strcat(new_token, token);
+    // handle object '.'/'@' getter shorthand
+#if defined(HAVE_PCRE_H)
+    static pcre* regex = NULL;
+    if (regex == NULL) {
+        const char* error_msg;
+        int error_pos;
+        regex = pcre_compile("[^.@]+[.@]*", 0, &error_msg, &error_pos, NULL);
+        if (regex == NULL) {
+            printf("regex compilation failed at offset %d: %s\n", error_pos, error_msg);
         }
-        sol_list_add_obj(result_list, (SolObject) sol_token_create(token));
-        sol_list_add_obj(result_list, (SolObject) sol_token_create("get"));
-        token = strtok(NULL, "@");
-        sol_list_add_obj(result_list, (SolObject) sol_token_create(token));
-        while ((token = strtok(NULL, "@")) != NULL) {
-            SolList old_list = result_list;
-            result_list = (SolList) sol_obj_retain((SolObject) sol_list_create(true));
-            result_list->freezeCount = -1;
-            sol_list_add_obj(result_list, (SolObject) old_list);
-            sol_list_add_obj(result_list, (SolObject) sol_token_create("get"));
-            sol_list_add_obj(result_list, (SolObject) sol_token_create(token));
-            sol_obj_release((SolObject) old_list);
-        }
-        free(result);
-        return (SolObject) result_list;
-    } else {
-        SolObject result_token = sol_obj_retain((SolObject) sol_token_create(result));
-        free(result);
-        return result_token;
     }
+    int osize = 15;
+    int* ovector = malloc(sizeof(*ovector) * osize);
+    int matches;
+    int offset = 0;
+    int len = strlen(result);
+    SolObject result_object = NULL;
+    while (matches = pcre_exec(regex, NULL, result, len, offset, 0, ovector, osize), ovector[1] > ovector[0]) {
+        if (matches == 0) {
+            osize *= 2;
+            realloc(ovector, osize);
+            continue;
+        }
+        char* match;
+        int match_len = pcre_get_substring(result, ovector, matches, 0, (const char**) &match);
+        offset = ovector[1];
+        char final = match[match_len - 1];
+        if (final == '.' || final == '@') {
+            SolList list = sol_list_create(true);
+            list->freezeCount = -1;
+            match[match_len - 1] = '\0';
+            if (!result_object) {
+                sol_list_add_obj(list, (SolObject) sol_token_create(match));
+            } else {
+                SolList current_list = (SolList) result_object;
+                sol_list_add_obj(current_list, (SolObject) sol_token_create(match));
+                sol_list_add_obj(list, (SolObject) current_list);
+            }
+            if (final == '.') {
+                sol_list_add_obj(list, (SolObject) sol_token_create("get"));
+            } else {
+                sol_list_add_obj(list, (SolObject) sol_token_create("@get"));
+            }
+            result_object = (SolObject) list;
+        } else {
+            if (!result_object) {
+                result_object = (SolObject) sol_token_create(match);
+            } else {
+                sol_list_add_obj((SolList) result_object, (SolObject) sol_token_create(match));
+            }
+            pcre_free(match);
+            break;
+        }
+        pcre_free(match);
+    }
+    
+    free(ovector);
+    free(result);
+    return sol_obj_retain(result_object);
+#else
+    regex_t regex;
+    regcomp(&regex, "[^.@][^.@]*[.@]*", 0);
+    char* result_offset = result;
+    regmatch_t matches[1];
+    SolObject result_object = NULL;
+    while (regexec(&regex, result_offset, 1, matches, 0) == 0 && matches->rm_eo > matches->rm_so) {
+        char* match = malloc(matches->rm_eo + 1);
+        memcpy(match, result_offset, matches->rm_eo);
+        match[matches->rm_eo] = '\0';
+        char final = match[matches->rm_eo - 1];
+        if (final == '.' || final == '@') {
+            SolList list = sol_list_create(true);
+            list->freezeCount = -1;
+            match[matches->rm_eo - 1] = '\0';
+            if (!result_object) {
+                sol_list_add_obj(list, (SolObject) sol_token_create(match));
+            } else {
+                SolList current_list = (SolList) result_object;
+                sol_list_add_obj(current_list, (SolObject) sol_token_create(match));
+                sol_list_add_obj(list, (SolObject) current_list);
+            }
+            if (final == '.') {
+                sol_list_add_obj(list, (SolObject) sol_token_create("get"));
+            } else {
+                sol_list_add_obj(list, (SolObject) sol_token_create("@get"));
+            }
+            result_object = (SolObject) list;
+        } else {
+            if (!result_object) {
+                result_object = (SolObject) sol_token_create(match);
+            } else {
+                sol_list_add_obj((SolList) result_object, (SolObject) sol_token_create(match));
+            }
+            free(match);
+            break;
+        }
+        free(match);
+        result_offset += matches->rm_eo;
+    }
+    free(result);
+    return sol_obj_retain(result_object);
+#endif
 }
 
 SolString read_string() {
