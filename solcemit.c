@@ -17,6 +17,7 @@ void write_length(uint64_t length);
 
 void write_object(SolObject obj);
 void write_list(SolList list);
+void write_object_literal(SolcObjectLiteral obj);
 void write_token(SolToken token);
 void write_string(SolString string);
 void write_number(SolNumber number);
@@ -94,7 +95,7 @@ void write_length(uint64_t length) {
 }
 
 void write_object(SolObject obj) {
-    switch (obj->type_id) {
+    switch ((int) obj->type_id) {
         case TYPE_SOL_LIST:
             write_list((SolList) obj);
             break;
@@ -114,6 +115,9 @@ void write_object(SolObject obj) {
                     exit(EXIT_FAILURE);
             }
             break;
+        case TYPE_SOLC_OBJ_LITERAL:
+            write_object_literal((SolcObjectLiteral) obj);
+            break;
         default:
             fprintf(stderr, "solc: error while emitting binary: unsupported object type\n");
             exit(EXIT_FAILURE);
@@ -129,6 +133,29 @@ void write_list(SolList list) {
     SOL_LIST_ITR_BEGIN(list)
         write_object(list->current->value);
     SOL_LIST_ITR_END(list)
+}
+
+void write_object_literal(SolcObjectLiteral obj) {
+    char* parent = obj->parent;
+    SolObject object = obj->object;
+    writec(0x1);
+    if (parent) {
+        uint64_t parent_length = strlen(parent);
+        write_length(parent_length);
+        writes(parent, sizeof(*parent) * parent_length);
+    } else {
+        write_length(0x0);
+    }
+    uint64_t object_length = HASH_COUNT(object->properties);
+    write_length(object_length);
+    struct token_pool_entry* el, * tmp;
+    HASH_ITER(hh, object->properties, el, tmp) {
+        char* key = el->identifier;
+        uint64_t key_length = strlen(key);
+        write_length(key_length);
+        writes(key, sizeof(*key) * key_length);
+        write_object(el->binding->value);
+    }
 }
 
 void write_token(SolToken token) {

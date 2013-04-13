@@ -17,6 +17,7 @@ static char* src;
 
 SolObject read_object();
 SolList read_list(bool object_mode, int freeze, bool bracketed);
+SolcObjectLiteral read_object_literal(char* parent);
 SolObject read_token();
 SolString read_string();
 SolNumber read_number();
@@ -110,6 +111,8 @@ SolObject read_object() {
                     return (SolObject) func_list;
                 }
                 return (SolObject) read_list(obj_modifier_active, -1, true);
+            case '{': // OBJECT LITERALS
+                return (SolObject) read_object_literal(obj_modifier_active ? "Object" : NULL);
             case '^': // FUNCTION SHORTHAND
                 if (*(src + 1) == '[') {
                     func_modifier = true;
@@ -118,7 +121,7 @@ SolObject read_object() {
                 }
                 return read_token();
             case '@': // OBJECT MODE STATEMENTS
-                if (*(src + 1) == '[') {
+                if (*(src + 1) == '[' || *(src + 1) == '{') {
                     obj_modifier = true;
                     src++;
                     continue;
@@ -132,7 +135,7 @@ SolObject read_object() {
 }
 
 SolList read_list(bool object_mode, int freeze, bool bracketed) {
-    // advance past open delimited
+    // advance past open delimiter
     src++;
     SolList list = (SolList) sol_obj_retain((SolObject) sol_list_create(object_mode));
     list->freezeCount = freeze;
@@ -153,6 +156,43 @@ SolList read_list(bool object_mode, int freeze, bool bracketed) {
         sol_obj_release(object);
     }
     fprintf(stderr, "solc: error while parsing source: encountered unclosed list\n");
+    exit(EXIT_FAILURE);
+}
+
+SolcObjectLiteral read_object_literal(char* parent) {
+    // advance past open delimiter
+    src++;
+    // create special object
+    SolcObjectLiteral object = sol_obj_clone_type(Object, &(struct solc_object_literal_raw){
+        parent,
+        sol_obj_create_raw()
+    }, sizeof(*object));
+    sol_obj_retain((SolObject) object);
+    object->super.type_id = TYPE_SOLC_OBJ_LITERAL;
+    // read literal data
+    while (*src != '\0') {
+        // skip whitespace characters
+        if (isspace(*src)) {
+            src++;
+            continue;
+        }
+        // handle literal termination
+        if (*src == '}') {
+            src++;
+            return (SolcObjectLiteral) object;
+        }
+        // read key/value
+        SolObject key = read_object();
+        if (key->type_id != TYPE_SOL_TOKEN) {
+            fprintf(stderr, "solc: error while parsing source: object literal key was not a token\n");
+            exit(EXIT_FAILURE);
+        }
+        SolObject value = read_object();
+        sol_obj_set_prop(object->object, ((SolToken) key)->identifier, value);
+        sol_obj_release(key);
+        sol_obj_release(value);
+    }
+    fprintf(stderr, "solc: error while parsing source: encountered unclosed object literal\n");
     exit(EXIT_FAILURE);
 }
 
