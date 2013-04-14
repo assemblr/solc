@@ -18,6 +18,7 @@ void write_length(uint64_t length);
 void write_object(SolObject obj);
 void write_list(SolList list);
 void write_object_literal(SolObject obj);
+void write_function(SolFunction func);
 void write_token(SolToken token);
 void write_string(SolString string);
 void write_number(SolNumber number);
@@ -115,6 +116,9 @@ void write_object(SolObject obj) {
                     exit(EXIT_FAILURE);
             }
             break;
+        case TYPE_SOL_FUNC:
+            write_function((SolFunction) obj);
+            break;
         case TYPE_SOL_OBJ: {
             SolString datatype = (SolString) sol_obj_get_prop(obj, "datatype");
             char* datatype_str = datatype->value;
@@ -165,6 +169,12 @@ void write_object_literal(SolObject obj) {
         write_object(el->binding->value);
     }
     sol_obj_release(object);
+}
+
+void write_function(SolFunction func) {
+    writec(0x3);
+    write_list(func->parameters);
+    write_list(func->statements);
 }
 
 void write_token(SolToken token) {

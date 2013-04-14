@@ -18,6 +18,7 @@ static char* src;
 SolObject read_object();
 SolList read_list(bool object_mode, int freeze, bool bracketed);
 SolObject read_object_literal(char* parent);
+SolFunction read_function_literal(SolList param_list);
 SolObject read_token();
 SolString read_string();
 SolNumber read_number();
@@ -77,12 +78,15 @@ SolObject read_object() {
     // handle special flags
     bool func_modifier, obj_modifier;
     SolToken obj_literal_parent;
+    SolList func_literal_params;
     while (*src != '\0') {
         bool func_modifier_active = func_modifier;
         bool obj_modifier_active = obj_modifier;
         SolToken obj_literal_parent_active = obj_literal_parent;
+        SolList func_literal_params_active = func_literal_params;
         func_modifier = obj_modifier = false;
         obj_literal_parent = NULL;
+        func_literal_params = NULL;
         
         // skip whitespace chars
         if (isspace(*src)) {
@@ -103,6 +107,16 @@ SolObject read_object() {
             case '"': // STRINGS
                 return (SolObject) read_string();
             case '(': // LISTS
+                if (func_modifier_active) {
+                    SolList list = read_list(false, 0, 0);
+                    if (*(src) == '{') {
+                        func_modifier = true;
+                        func_literal_params = list;
+                        continue;
+                    }
+                    fprintf(stderr, "solc: error while parsing source: function modifier found before frozen list\n");
+                    exit(EXIT_FAILURE);
+                }
                 return (SolObject) read_list(false, 0, 0);
             case '[': // STATEMENTS
                 if (func_modifier_active) {
@@ -123,9 +137,12 @@ SolObject read_object() {
                     }
                     return (SolObject) read_object_literal("Object");
                 }
+                if (func_modifier_active) {
+                    return (SolObject) read_function_literal(func_literal_params_active ?  func_literal_params_active : (SolList) nil);
+                }
                 return (SolObject) read_object_literal(NULL);
             case '^': // FUNCTION SHORTHAND
-                if (*(src + 1) == '[') {
+                if (*(src + 1) == '[' || *(src + 1) == '(' || *(src + 1) == '{') {
                     func_modifier = true;
                     src++;
                     continue;
@@ -214,6 +231,34 @@ SolObject read_object_literal(char* parent) {
         sol_obj_set_prop(object_object, ((SolToken) key)->identifier, value);
         sol_obj_release(key);
         sol_obj_release(value);
+    }
+    fprintf(stderr, "solc: error while parsing source: encountered unclosed object literal\n");
+    exit(EXIT_FAILURE);
+}
+
+SolFunction read_function_literal(SolList param_list) {
+    // advance past open delimiter
+    src++;
+    SolList statement_list = (SolList) sol_obj_retain((SolObject) sol_list_create(false));
+    // read literal data
+    while (*src != '\0') {
+        // skip whitespace characters
+        if (isspace(*src)) {
+            src++;
+            continue;
+        }
+        // handle literal termination
+        if (*src == '}') {
+            src++;
+            SolFunction func = (SolFunction) sol_obj_retain((SolObject) sol_func_create(param_list, statement_list));
+            sol_obj_release((SolObject) param_list);
+            sol_obj_release((SolObject) statement_list);
+            return func;
+        }
+        // read key/value
+        SolObject statement = read_object();
+        sol_list_add_obj(statement_list, statement);
+        sol_obj_release(statement);
     }
     fprintf(stderr, "solc: error while parsing source: encountered unclosed object literal\n");
     exit(EXIT_FAILURE);
