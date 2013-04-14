@@ -76,10 +76,13 @@ SolList solc_parse(char* source) {
 SolObject read_object() {
     // handle special flags
     bool func_modifier, obj_modifier;
+    SolToken obj_literal_parent;
     while (*src != '\0') {
         bool func_modifier_active = func_modifier;
         bool obj_modifier_active = obj_modifier;
+        SolToken obj_literal_parent_active = obj_literal_parent;
         func_modifier = obj_modifier = false;
+        obj_literal_parent = NULL;
         
         // skip whitespace chars
         if (isspace(*src)) {
@@ -112,7 +115,15 @@ SolObject read_object() {
                 }
                 return (SolObject) read_list(obj_modifier_active, -1, true);
             case '{': // OBJECT LITERALS
-                return (SolObject) read_object_literal(obj_modifier_active ? "Object" : NULL);
+                if (obj_modifier_active) {
+                    if (obj_literal_parent_active) {
+                        SolObject literal = (SolObject) read_object_literal(obj_literal_parent_active->identifier);
+                        sol_obj_release((SolObject) obj_literal_parent_active);
+                        return literal;
+                    }
+                    return (SolObject) read_object_literal("Object");
+                }
+                return (SolObject) read_object_literal(NULL);
             case '^': // FUNCTION SHORTHAND
                 if (*(src + 1) == '[') {
                     func_modifier = true;
@@ -124,6 +135,18 @@ SolObject read_object() {
                 if (*(src + 1) == '[' || *(src + 1) == '{') {
                     obj_modifier = true;
                     src++;
+                    continue;
+                }
+                char* lookahead = src + 1;
+                for (; !is_delimiter(*lookahead); lookahead++) {}
+                if (*lookahead == '{') {
+                    obj_modifier = true;
+                    src++;
+                    obj_literal_parent = (SolToken) read_token();
+                    if (obj_literal_parent->super.type_id != TYPE_SOL_TOKEN) {
+                        fprintf(stderr, "solc: error while parsing source: object literal parent was not a token\n");
+                        exit(EXIT_FAILURE);
+                    }
                     continue;
                 }
                 return read_token();
@@ -164,7 +187,7 @@ SolcObjectLiteral read_object_literal(char* parent) {
     src++;
     // create special object
     SolcObjectLiteral object = sol_obj_clone_type(Object, &(struct solc_object_literal_raw){
-        parent,
+        strdup(parent),
         sol_obj_create_raw()
     }, sizeof(*object));
     sol_obj_retain((SolObject) object);
