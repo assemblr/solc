@@ -243,7 +243,7 @@ SolObject read_token() {
     if (regex == NULL) {
         const char* error_msg;
         int error_pos;
-        regex = pcre_compile("[^.@]+[.@]*", 0, &error_msg, &error_pos, NULL);
+        regex = pcre_compile("[.@]?[^.@]+[.@]*", 0, &error_msg, &error_pos, NULL);
         if (regex == NULL) {
             printf("regex compilation failed at offset %d: %s\n", error_pos, error_msg);
         }
@@ -298,7 +298,7 @@ SolObject read_token() {
     return sol_obj_retain(result_object);
 #else
     regex_t regex;
-    regcomp(&regex, "[^.@][^.@]*[.@]*", 0);
+    regcomp(&regex, "[.@]\\{0,1\\}[^.@][^.@]*[.@]*", 0);
     char* result_offset = result;
     regmatch_t matches[1];
     SolObject result_object = NULL;
