@@ -17,7 +17,7 @@ static char* src;
 
 SolObject read_object();
 SolList read_list(bool object_mode, int freeze, bool bracketed);
-SolcObjectLiteral read_object_literal(char* parent);
+SolObject read_object_literal(char* parent);
 SolObject read_token();
 SolString read_string();
 SolNumber read_number();
@@ -182,16 +182,16 @@ SolList read_list(bool object_mode, int freeze, bool bracketed) {
     exit(EXIT_FAILURE);
 }
 
-SolcObjectLiteral read_object_literal(char* parent) {
+SolObject read_object_literal(char* parent) {
     // advance past open delimiter
     src++;
     // create special object
-    SolcObjectLiteral object = sol_obj_clone_type(Object, &(struct solc_object_literal_raw){
-        strdup(parent),
-        sol_obj_create_raw()
-    }, sizeof(*object));
-    sol_obj_retain((SolObject) object);
-    object->super.type_id = TYPE_SOLC_OBJ_LITERAL;
+    SolObject object = sol_obj_create_raw();
+    sol_obj_set_prop(object, "datatype", (SolObject) sol_string_create("object-literal"));
+    if (parent) sol_obj_set_prop(object, "parent", (SolObject) sol_string_create(parent));
+    SolObject object_object = sol_obj_create_raw();
+    sol_obj_set_prop(object, "object", object_object);
+    sol_obj_release(object_object);
     // read literal data
     while (*src != '\0') {
         // skip whitespace characters
@@ -202,7 +202,7 @@ SolcObjectLiteral read_object_literal(char* parent) {
         // handle literal termination
         if (*src == '}') {
             src++;
-            return (SolcObjectLiteral) object;
+            return object;
         }
         // read key/value
         SolObject key = read_object();
@@ -211,7 +211,7 @@ SolcObjectLiteral read_object_literal(char* parent) {
             exit(EXIT_FAILURE);
         }
         SolObject value = read_object();
-        sol_obj_set_prop(object->object, ((SolToken) key)->identifier, value);
+        sol_obj_set_prop(object_object, ((SolToken) key)->identifier, value);
         sol_obj_release(key);
         sol_obj_release(value);
     }

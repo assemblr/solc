@@ -17,7 +17,7 @@ void write_length(uint64_t length);
 
 void write_object(SolObject obj);
 void write_list(SolList list);
-void write_object_literal(SolcObjectLiteral obj);
+void write_object_literal(SolObject obj);
 void write_token(SolToken token);
 void write_string(SolString string);
 void write_number(SolNumber number);
@@ -115,9 +115,15 @@ void write_object(SolObject obj) {
                     exit(EXIT_FAILURE);
             }
             break;
-        case TYPE_SOLC_OBJ_LITERAL:
-            write_object_literal((SolcObjectLiteral) obj);
-            break;
+        case TYPE_SOL_OBJ: {
+            SolString datatype = (SolString) sol_obj_get_prop(obj, "datatype");
+            char* datatype_str = datatype->value;
+            sol_obj_release((SolObject) datatype);
+            if (!strcmp(datatype_str, "object-literal")) {
+                write_object_literal(obj);
+                break;
+            }
+        }
         default:
             fprintf(stderr, "solc: error while emitting binary: unsupported object type\n");
             exit(EXIT_FAILURE);
@@ -135,14 +141,16 @@ void write_list(SolList list) {
     SOL_LIST_ITR_END(list)
 }
 
-void write_object_literal(SolcObjectLiteral obj) {
-    char* parent = obj->parent;
-    SolObject object = obj->object;
+void write_object_literal(SolObject obj) {
+    SolString parent = (SolString) sol_obj_get_prop(obj, "parent");
+    SolObject object = sol_obj_get_prop(obj, "object");
     writec(0x1);
     if (parent) {
-        uint64_t parent_length = strlen(parent);
+        char* parent_str = parent->value;
+        uint64_t parent_length = strlen(parent_str);
         write_length(parent_length);
-        writes(parent, sizeof(*parent) * parent_length);
+        writes(parent_str, sizeof(*parent_str) * parent_length);
+        sol_obj_release((SolObject) parent);
     } else {
         write_length(0x0);
     }
@@ -156,6 +164,7 @@ void write_object_literal(SolcObjectLiteral obj) {
         writes(key, sizeof(*key) * key_length);
         write_object(el->binding->value);
     }
+    sol_obj_release(object);
 }
 
 void write_token(SolToken token) {

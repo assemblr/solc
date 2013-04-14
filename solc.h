@@ -12,16 +12,6 @@
 #include <stdio.h>
 #include <sol/runtime.h>
 
-typedef enum {
-    TYPE_SOLC_OBJ_LITERAL = 0x1000
-} solc_obj_type;
-
-STRUCT_EXTEND(sol_obj, solc_object_literal,
-    char* parent;
-    SolObject object;
-);
-typedef solc_object_literal* SolcObjectLiteral;
-
 SolList solc_parse(char* source);
 SolList solc_parse_f(FILE* source);
 
