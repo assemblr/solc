@@ -16,7 +16,7 @@
 static char* src;
 
 SolObject read_object();
-SolList read_list(bool object_mode, int freeze, bool bracketed);
+SolObject read_list(bool object_mode, bool frozen, bool bracketed);
 SolObject read_object_literal(char* parent);
 SolFunction read_function_literal(SolList param_list);
 SolObject read_token();
@@ -108,7 +108,7 @@ SolObject read_object() {
                 return (SolObject) read_string();
             case '(': // LISTS
                 if (func_modifier_active) {
-                    SolList list = read_list(false, 0, 0);
+                    SolList list = (SolList) read_list(false, false, false);
                     if (*(src) == '{') {
                         func_modifier = true;
                         func_literal_params = list;
@@ -117,17 +117,16 @@ SolObject read_object() {
                     fprintf(stderr, "solc: error while parsing source: function modifier found before frozen list\n");
                     exit(EXIT_FAILURE);
                 }
-                return (SolObject) read_list(false, 0, 0);
+                return (SolObject) read_list(false, true, false);
             case '[': // STATEMENTS
                 if (func_modifier_active) {
                     SolList func_list = (SolList) sol_obj_retain((SolObject) sol_list_create(false));
-                    func_list->freezeCount = -1;
                     sol_list_add_obj(func_list, (SolObject) sol_token_create("^"));
-                    sol_list_add_obj(func_list, (SolObject) sol_list_create(false));
-                    sol_list_add_obj(func_list, (SolObject) read_list(obj_modifier_active, -1, true));
+                    sol_list_add_obj(func_list, (SolObject) sol_list_create_frozen(false));
+                    sol_list_add_obj(func_list, (SolObject) read_list(obj_modifier_active, false, true));
                     return (SolObject) func_list;
                 }
-                return (SolObject) read_list(obj_modifier_active, -1, true);
+                return (SolObject) read_list(obj_modifier_active, false, true);
             case '{': // OBJECT LITERALS
                 if (obj_modifier_active) {
                     if (obj_literal_parent_active) {
@@ -138,7 +137,7 @@ SolObject read_object() {
                     return (SolObject) read_object_literal("Object");
                 }
                 if (func_modifier_active) {
-                    return (SolObject) read_function_literal(func_literal_params_active ?  func_literal_params_active : (SolList) nil);
+                    return (SolObject) read_function_literal(func_literal_params_active ?  func_literal_params_active : ((SolListFrozen) nil)->value);
                 }
                 return (SolObject) read_object_literal(NULL);
             case '^': // FUNCTION SHORTHAND
@@ -167,6 +166,14 @@ SolObject read_object() {
                     continue;
                 }
                 return read_token();
+            case ':': // FROZEN OBJECTS
+                src++;
+                SolObject obj = read_object();
+                SolList list = (SolList) sol_obj_retain((SolObject) sol_list_create(false));
+                sol_list_add_obj(list, (SolObject) sol_token_create("freeze"));
+                sol_list_add_obj(list, obj);
+                sol_obj_release(obj);
+                return (SolObject) list;
             default:
                 return read_token();
         }
@@ -174,11 +181,10 @@ SolObject read_object() {
     return NULL;
 }
 
-SolList read_list(bool object_mode, int freeze, bool bracketed) {
+SolObject read_list(bool object_mode, bool frozen, bool bracketed) {
     // advance past open delimiter
     src++;
     SolList list = (SolList) sol_obj_retain((SolObject) sol_list_create(object_mode));
-    list->freezeCount = freeze;
     while (*src != '\0') {
         // skip whitespace characters
         if (isspace(*src)) {
@@ -188,7 +194,13 @@ SolList read_list(bool object_mode, int freeze, bool bracketed) {
         // handle list termination
         if (*src == (bracketed ? ']' : ')')) {
             src++;
-            return list;
+            if (frozen) {
+                SolListFrozen frozen = (SolListFrozen) sol_obj_freeze((SolObject) list);
+                sol_obj_release((SolObject) list);
+                return sol_obj_retain((SolObject) frozen);
+            } else {
+                return (SolObject) list;
+            }
         }
         // add object
         SolObject object = read_object();
@@ -311,13 +323,16 @@ SolObject read_token() {
         char final = match[match_len - 1];
         if (final == '.' || final == '@') {
             SolList list = sol_list_create(true);
-            list->freezeCount = -1;
             match[match_len - 1] = '\0';
             if (!result_object) {
                 sol_list_add_obj(list, (SolObject) sol_token_create(match));
             } else {
                 SolList current_list = (SolList) result_object;
-                sol_list_add_obj(current_list, (SolObject) sol_token_create(match));
+                SolList frozen = (SolList) sol_obj_retain((SolObject) sol_list_create(false));
+                sol_list_add_obj(frozen, (SolObject) sol_token_create("freeze"));
+                sol_list_add_obj(frozen, (SolObject) sol_token_create(match));
+                sol_list_add_obj(current_list, (SolObject) frozen);
+                sol_obj_release((SolObject) frozen);
                 sol_list_add_obj(list, (SolObject) current_list);
             }
             if (final == '.') {
@@ -330,7 +345,11 @@ SolObject read_token() {
             if (!result_object) {
                 result_object = (SolObject) sol_token_create(match);
             } else {
-                sol_list_add_obj((SolList) result_object, (SolObject) sol_token_create(match));
+                SolList frozen = (SolList) sol_obj_retain((SolObject) sol_list_create(false));
+                sol_list_add_obj(frozen, (SolObject) sol_token_create("freeze"));
+                sol_list_add_obj(frozen, (SolObject) sol_token_create(match));
+                sol_list_add_obj((SolList) result_object, (SolObject) frozen);
+                sol_obj_release((SolObject) frozen);
             }
             pcre_free(match);
             break;
@@ -354,7 +373,7 @@ SolObject read_token() {
         char final = match[matches->rm_eo - 1];
         if (final == '.' || final == '@') {
             SolList list = sol_list_create(true);
-            list->freezeCount = -1;
+            list->freezeCount = 0;
             match[matches->rm_eo - 1] = '\0';
             if (!result_object) {
                 sol_list_add_obj(list, (SolObject) sol_token_create(match));

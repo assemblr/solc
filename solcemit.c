@@ -16,7 +16,7 @@ uint64_t ntohll(uint64_t value);
 void write_length(uint64_t length);
 
 void write_object(SolObject obj);
-void write_list(SolList list);
+void write_list(SolList list, bool literal);
 void write_object_literal(SolObject obj);
 void write_function(SolFunction func);
 void write_token(SolToken token);
@@ -96,9 +96,9 @@ void write_length(uint64_t length) {
 }
 
 void write_object(SolObject obj) {
-    switch ((int) obj->type_id) {
+    switch (obj->type_id) {
         case TYPE_SOL_LIST:
-            write_list((SolList) obj);
+            write_list((SolList) obj, false);
             break;
         case TYPE_SOL_TOKEN:
             write_token((SolToken) obj);
@@ -128,17 +128,24 @@ void write_object(SolObject obj) {
                 break;
             }
         }
+        case TYPE_SOL_OBJ_FROZEN:
+            if (((SolObjectFrozen) obj)->value->type_id == TYPE_SOL_LIST) {
+                write_list((SolList) ((SolObjectFrozen) obj)->value, true);
+            } else {
+                writec(0x8);
+                write_object(((SolObjectFrozen) obj)->value);
+            }
+            break;
         default:
             fprintf(stderr, "solc: error while emitting binary: unsupported object type\n");
             exit(EXIT_FAILURE);
     }
 }
 
-void write_list(SolList list) {
+void write_list(SolList list, bool literal) {
     writec(0x2);
     writec(list->object_mode);
-    int freeze_count = list->freezeCount + 1;
-    write_length(freeze_count);
+    writec(literal);
     write_length(list->length);
     SOL_LIST_ITR_BEGIN(list)
         write_object(list->current->value);
@@ -173,8 +180,8 @@ void write_object_literal(SolObject obj) {
 
 void write_function(SolFunction func) {
     writec(0x3);
-    write_list(func->parameters);
-    write_list(func->statements);
+    write_list(func->parameters, false);
+    write_list(func->statements, false);
 }
 
 void write_token(SolToken token) {
