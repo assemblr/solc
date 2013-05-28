@@ -137,7 +137,7 @@ SolObject read_object() {
                     return (SolObject) read_object_literal("Object");
                 }
                 if (func_modifier_active) {
-                    return (SolObject) read_function_literal(func_literal_params_active ?  func_literal_params_active : ((SolListFrozen) nil)->value);
+                    return (SolObject) read_function_literal(func_literal_params_active ? func_literal_params_active : (SolList) nil);
                 }
                 return (SolObject) read_object_literal(NULL);
             case '^': // FUNCTION SHORTHAND
