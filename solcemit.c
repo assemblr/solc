@@ -194,7 +194,7 @@ void write_token(SolToken token) {
     }
     if (!strcmp(token->identifier, "false")) {
         writec(0x7);
-        writec(1);
+        writec(0);
         return;
     }
     // otherwise write a token
