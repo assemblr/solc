@@ -30,9 +30,9 @@ unsigned char* solc_emit(SolList source, off_t* size) {
     out = tmpfile();
     
     writec('S'); writec('O'); writec('L'); writec('B'); writec('I'); writec('N');
-    SOL_LIST_ITR_BEGIN(source)
+    SOL_LIST_ITR(source) {
         write_object(source->current->value);
-    SOL_LIST_ITR_END(source)
+    }
     writec(0x0);
     
     // read temporary file into buffer
@@ -147,9 +147,9 @@ void write_list(SolList list, bool literal) {
     writec(list->object_mode);
     writec(literal);
     write_length(list->length);
-    SOL_LIST_ITR_BEGIN(list)
+    SOL_LIST_ITR(list) {
         write_object(list->current->value);
-    SOL_LIST_ITR_END(list)
+    }
 }
 
 void write_object_literal(SolObject obj) {
