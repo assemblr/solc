@@ -11,7 +11,7 @@
 #include <string.h>
 
 #include <sol/runtime.h>
-#include <solc/solc.h>
+#include "solc.h"
 #include "solgen.h"
 #include "linenoise.h"
 
