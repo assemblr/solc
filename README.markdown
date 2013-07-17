@@ -5,6 +5,15 @@ sol source files to libsol-compatible C source.
 
 Building solc
 =============
+
+Requirements
+------------
+To build solc, you'll need the following installed on your system:
+
+* [PCRE](http://pcre.org/) - Perl Compatible Regular Expressions
+
+Building
+--------
 The process to build solc is the same as that of libsol; see
 the libsol README for the build process information.
 

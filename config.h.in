@@ -1,2 +1,0 @@
-#cmakedefine HAVE_PCRE_H
-#cmakedefine HAVE_REGEX_H

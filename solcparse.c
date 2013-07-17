@@ -1,17 +1,10 @@
 
-#include "config.h"
-
 #include "solc.h"
 
 #include <string.h>
 #include <ctype.h>
 #include <sys/stat.h>
-
-#if defined(HAVE_PCRE_H)
 #include <pcre.h>
-#else
-#include <regex.h>
-#endif
 
 static char* src;
 
@@ -295,7 +288,6 @@ SolObject read_token() {
     free(buff);
     
     // handle object '.'/'@' getter shorthand
-#if defined(HAVE_PCRE_H)
     static pcre* regex = NULL;
     if (regex == NULL) {
         const char* error_msg;
@@ -360,49 +352,6 @@ SolObject read_token() {
     free(ovector);
     free(result);
     return sol_obj_retain(result_object);
-#else
-    regex_t regex;
-    regcomp(&regex, "[.@]\\{0,1\\}[^.@][^.@]*[.@]*", 0);
-    char* result_offset = result;
-    regmatch_t matches[1];
-    SolObject result_object = NULL;
-    while (regexec(&regex, result_offset, 1, matches, 0) == 0 && matches->rm_eo > matches->rm_so) {
-        char* match = malloc(matches->rm_eo + 1);
-        memcpy(match, result_offset, matches->rm_eo);
-        match[matches->rm_eo] = '\0';
-        char final = match[matches->rm_eo - 1];
-        if (final == '.' || final == '@') {
-            SolList list = sol_list_create(true);
-            list->freezeCount = 0;
-            match[matches->rm_eo - 1] = '\0';
-            if (!result_object) {
-                sol_list_add_obj(list, (SolObject) sol_token_create(match));
-            } else {
-                SolList current_list = (SolList) result_object;
-                sol_list_add_obj(current_list, (SolObject) sol_token_create(match));
-                sol_list_add_obj(list, (SolObject) current_list);
-            }
-            if (final == '.') {
-                sol_list_add_obj(list, (SolObject) sol_token_create("get"));
-            } else {
-                sol_list_add_obj(list, (SolObject) sol_token_create("@get"));
-            }
-            result_object = (SolObject) list;
-        } else {
-            if (!result_object) {
-                result_object = (SolObject) sol_token_create(match);
-            } else {
-                sol_list_add_obj((SolList) result_object, (SolObject) sol_token_create(match));
-            }
-            free(match);
-            break;
-        }
-        free(match);
-        result_offset += matches->rm_eo;
-    }
-    free(result);
-    return sol_obj_retain(result_object);
-#endif
 }
 
 SolString read_string() {

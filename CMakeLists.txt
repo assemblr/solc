@@ -6,14 +6,6 @@ include_directories("${CMAKE_INSTALL_PREFIX}/include")
 # build for C99
 add_definitions(-std=c99)
 
-# set up checks
-include(CheckIncludeFile)
-get_property(INCLUDE_DIRS DIRECTORY ${CMAKE_SOURCE_DIR} PROPERTY INCLUDE_DIRECTORIES)
-set(CMAKE_REQUIRED_INCLUDES ${INCLUDE_DIRS})
-check_include_file(pcre.h HAVE_PCRE_H)
-check_include_file(regex.h HAVE_REGEX_H)
-configure_file("${CMAKE_SOURCE_DIR}/config.h.in" "${CMAKE_SOURCE_DIR}/config.h")
-
 # load extra modules
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 
@@ -31,7 +23,7 @@ set (SOLC_SOURCES
     solgen.c
     linenoise.c)
 set (SOLC_PUBLIC_HEADERS
-    config.h)
+    )
 set (SOLC_PRIVATE_HEADERS
     solgen.h
     linenoise.h)
@@ -46,11 +38,9 @@ add_executable(solc ${SOLC_SOURCES} ${SOLC_PUBLIC_HEADERS} ${SOLC_PRIVATE_HEADER
 target_link_libraries(solc libsolc)
 
 # load and link PCRE
-if (HAVE_PCRE_H)
-    find_package(PCRE REQUIRED)
-    include_directories(${PCRE_INCLUDE_DIRS})
-    target_link_libraries(libsolc ${PCRE_LIBRARIES})
-endif()
+find_package(PCRE REQUIRED)
+include_directories(${PCRE_INCLUDE_DIRS})
+target_link_libraries(libsolc ${PCRE_LIBRARIES})
 
 # install targets
 install(TARGETS libsolc LIBRARY DESTINATION lib)
