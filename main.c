@@ -127,6 +127,7 @@ void solc_repl_activate(void) {
         }
         free(line);
     }
+    sol_runtime_destroy();
 }
 
 char* file_strip_path(char* file) {
