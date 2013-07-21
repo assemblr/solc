@@ -117,7 +117,7 @@ void solc_repl_activate(void) {
             unsigned char* bytecode = solc_compile(line, NULL);
             SolObject result = sol_runtime_execute(bytecode);
             // print output
-            char* result_str = sol_obj_to_string(result);
+            char* result_str = sol_obj_inspect(result);
             sol_obj_release(result);
             printf("%s\n", result_str);
             free(result_str);

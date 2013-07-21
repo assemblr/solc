@@ -32,7 +32,11 @@ void cprint_footer() {
     cprint("};\n\n");
     cprint("int main(int argc, char** argv) {\n");
     cprint("    sol_runtime_init();\n");
+    cprint("    SolList arguments = (SolList) sol_obj_retain((SolObject) sol_list_create(false));");
+    cprint("    for (int i = 0; i < argc; i++) { sol_list_add_obj(arguments, (SolObject) sol_string_create(argv[i])); }");
+    cprint("    sol_token_register(\"arguments\", (SolObject) arguments);");
     cprint("    sol_runtime_execute(data);\n");
+    cprint("    sol_obj_release((SolObject) arguments);");
     cprint("    sol_runtime_destroy();\n");
     cprint("    return 0;\n");
     cprint("}\n");
