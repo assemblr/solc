@@ -154,7 +154,6 @@ void write_list(SolList list, bool literal) {
 
 void write_object_literal(SolObject obj) {
     SolString parent = (SolString) sol_obj_get_prop(obj, "parent");
-    SolObject object = sol_obj_get_prop(obj, "object");
     writec(0x1);
     if (parent) {
         char* parent_str = parent->value;
@@ -165,17 +164,12 @@ void write_object_literal(SolObject obj) {
     } else {
         write_length(0x0);
     }
-    uint64_t object_length = HASH_COUNT(object->properties);
-    write_length(object_length);
-    struct token_pool_entry* el, * tmp;
-    HASH_ITER(hh, object->properties, el, tmp) {
-        char* key = el->identifier;
-        uint64_t key_length = strlen(key);
-        write_length(key_length);
-        writes(key, sizeof(*key) * key_length);
-        write_object(el->binding->value);
-    }
-    sol_obj_release(object);
+    SolObject keys = sol_obj_get_prop(obj, "keys");
+    SolObject values = sol_obj_get_prop(obj, "values");
+    write_object(keys);
+    write_object(values);
+    sol_obj_release(keys);
+    sol_obj_release(values);
 }
 
 void write_function(SolFunction func) {

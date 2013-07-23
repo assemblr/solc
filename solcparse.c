@@ -211,9 +211,10 @@ SolObject read_object_literal(char* parent) {
     SolObject object = sol_obj_create_raw();
     sol_obj_set_prop(object, "datatype", (SolObject) sol_string_create("object-literal"));
     if (parent) sol_obj_set_prop(object, "parent", (SolObject) sol_string_create(parent));
-    SolObject object_object = sol_obj_create_raw();
-    sol_obj_set_prop(object, "object", object_object);
-    sol_obj_release(object_object);
+    SolList keys = sol_list_create(false);
+    SolList values = sol_list_create(false);
+    sol_obj_set_prop(object, "keys", (SolObject) keys);
+    sol_obj_set_prop(object, "values", (SolObject) values);
     // read literal data
     while (*src != '\0') {
         // skip whitespace characters
@@ -228,12 +229,9 @@ SolObject read_object_literal(char* parent) {
         }
         // read key/value
         SolObject key = read_object();
-        if (key->type_id != TYPE_SOL_TOKEN) {
-            fprintf(stderr, "solc: error while parsing source: object literal key was not a token\n");
-            exit(EXIT_FAILURE);
-        }
         SolObject value = read_object();
-        sol_obj_set_prop(object_object, ((SolToken) key)->identifier, value);
+        sol_list_add_obj(keys, key);
+        sol_list_add_obj(values, value);
         sol_obj_release(key);
         sol_obj_release(value);
     }
