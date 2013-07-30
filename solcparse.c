@@ -9,9 +9,9 @@
 static char* src;
 
 SolObject read_object();
-SolObject read_list(bool object_mode, bool frozen, bool bracketed);
+SolObject read_list(bool object_mode, bool frozen);
 SolObject read_object_literal(char* parent);
-SolFunction read_function_literal(SolList param_list);
+SolObject read_function_literal(SolList param_list);
 SolObject read_token();
 SolString read_string();
 SolNumber read_number();
@@ -101,7 +101,7 @@ SolObject read_object() {
                 return (SolObject) read_string();
             case '(': // LISTS
                 if (func_modifier_active) {
-                    SolList list = (SolList) read_list(false, false, false);
+                    SolList list = (SolList) read_list(false, true);
                     if (*(src) == '{') {
                         func_modifier = true;
                         func_literal_params = list;
@@ -110,16 +110,19 @@ SolObject read_object() {
                     fprintf(stderr, "solc: error while parsing source: function modifier found before frozen list\n");
                     exit(EXIT_FAILURE);
                 }
-                return (SolObject) read_list(false, true, false);
+                return (SolObject) read_list(false, true);
             case '[': // STATEMENTS
                 if (func_modifier_active) {
                     SolList func_list = (SolList) sol_obj_retain((SolObject) sol_list_create(false));
                     sol_list_add_obj(func_list, (SolObject) sol_token_create("^"));
-                    sol_list_add_obj(func_list, (SolObject) sol_list_create_frozen(false));
-                    sol_list_add_obj(func_list, (SolObject) read_list(obj_modifier_active, false, true));
+                    SolList param_list = sol_list_create(false);
+                    sol_list_add_obj(func_list, (SolObject) param_list);
+                    sol_list_add_obj(param_list, (SolObject) sol_token_create("freeze"));
+                    sol_list_add_obj(param_list, (SolObject) sol_list_create(false));
+                    sol_list_add_obj(func_list, (SolObject) read_list(obj_modifier_active, false));
                     return (SolObject) func_list;
                 }
-                return (SolObject) read_list(obj_modifier_active, false, true);
+                return (SolObject) read_list(obj_modifier_active, false);
             case '{': // OBJECT LITERALS
                 if (obj_modifier_active) {
                     if (obj_literal_parent_active) {
@@ -174,7 +177,7 @@ SolObject read_object() {
     return NULL;
 }
 
-SolObject read_list(bool object_mode, bool frozen, bool bracketed) {
+SolObject read_list(bool object_mode, bool frozen) {
     // advance past open delimiter
     src++;
     SolList list = (SolList) sol_obj_retain((SolObject) sol_list_create(object_mode));
@@ -185,12 +188,14 @@ SolObject read_list(bool object_mode, bool frozen, bool bracketed) {
             continue;
         }
         // handle list termination
-        if (*src == (bracketed ? ']' : ')')) {
+        if (*src == (frozen ? ')' : ']')) {
             src++;
             if (frozen) {
-                SolListFrozen frozen = (SolListFrozen) sol_obj_freeze((SolObject) list);
+                SolList frozen = (SolList) sol_obj_retain((SolObject) sol_list_create(false));
+                sol_list_add_obj(frozen, (SolObject) sol_token_create("freeze"));
+                sol_list_add_obj(frozen, (SolObject) list);
                 sol_obj_release((SolObject) list);
-                return sol_obj_retain((SolObject) frozen);
+                return (SolObject) frozen;
             } else {
                 return (SolObject) list;
             }
@@ -207,14 +212,10 @@ SolObject read_list(bool object_mode, bool frozen, bool bracketed) {
 SolObject read_object_literal(char* parent) {
     // advance past open delimiter
     src++;
-    // create special object
-    SolObject object = sol_obj_create_raw();
-    sol_obj_set_prop(object, "datatype", (SolObject) sol_string_create("object-literal"));
-    if (parent) sol_obj_set_prop(object, "parent", (SolObject) sol_string_create(parent));
-    SolList keys = sol_list_create(false);
-    SolList values = sol_list_create(false);
-    sol_obj_set_prop(object, "keys", (SolObject) keys);
-    sol_obj_set_prop(object, "values", (SolObject) values);
+    // create raw parameter
+    SolList raw_list = (SolList) sol_obj_retain((SolObject) sol_list_create(true));
+    sol_list_add_obj(raw_list, (SolObject) sol_token_create("Object"));
+    sol_list_add_obj(raw_list, (SolObject) sol_token_create("create"));
     // read literal data
     while (*src != '\0') {
         // skip whitespace characters
@@ -225,13 +226,22 @@ SolObject read_object_literal(char* parent) {
         // handle literal termination
         if (*src == '}') {
             src++;
-            return object;
+            if (parent) {
+                SolList result_list = (SolList) sol_obj_retain((SolObject) sol_list_create(true));
+                sol_list_add_obj(result_list, (SolObject) sol_token_create(parent));
+                sol_list_add_obj(result_list, (SolObject) sol_token_create("clone"));
+                sol_list_add_obj(result_list, (SolObject) raw_list);
+                sol_obj_release((SolObject) raw_list);
+                return (SolObject) result_list;
+            } else {
+                return (SolObject) raw_list;
+            }
         }
         // read key/value
         SolObject key = read_object();
         SolObject value = read_object();
-        sol_list_add_obj(keys, key);
-        sol_list_add_obj(values, value);
+        sol_list_add_obj(raw_list, key);
+        sol_list_add_obj(raw_list, value);
         sol_obj_release(key);
         sol_obj_release(value);
     }
@@ -239,7 +249,7 @@ SolObject read_object_literal(char* parent) {
     exit(EXIT_FAILURE);
 }
 
-SolFunction read_function_literal(SolList param_list) {
+SolObject read_function_literal(SolList param_list) {
     // advance past open delimiter
     src++;
     SolList statement_list = (SolList) sol_obj_retain((SolObject) sol_list_create(false));
@@ -253,10 +263,14 @@ SolFunction read_function_literal(SolList param_list) {
         // handle literal termination
         if (*src == '}') {
             src++;
-            SolFunction func = (SolFunction) sol_obj_retain((SolObject) sol_func_create(param_list, statement_list));
+            SolList result_list = (SolList) sol_obj_retain((SolObject) sol_list_create(false));
+            sol_list_add_obj(result_list, (SolObject) sol_token_create("^"));
+            sol_list_add_obj(result_list, (SolObject) param_list);
             sol_obj_release((SolObject) param_list);
-            sol_obj_release((SolObject) statement_list);
-            return func;
+            SOL_LIST_ITR(statement_list) {
+                sol_list_add_obj(result_list, statement_list->current->value);
+            }
+            return (SolObject) result_list;
         }
         // read key/value
         SolObject statement = read_object();

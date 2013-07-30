@@ -16,9 +16,7 @@ uint64_t ntohll(uint64_t value);
 void write_length(uint64_t length);
 
 void write_object(SolObject obj);
-void write_list(SolList list, bool literal);
-void write_object_literal(SolObject obj);
-void write_function(SolFunction func);
+void write_list(SolList list);
 void write_token(SolToken token);
 void write_string(SolString string);
 void write_number(SolNumber number);
@@ -98,7 +96,7 @@ void write_length(uint64_t length) {
 void write_object(SolObject obj) {
     switch (obj->type_id) {
         case TYPE_SOL_LIST:
-            write_list((SolList) obj, false);
+            write_list((SolList) obj);
             break;
         case TYPE_SOL_TOKEN:
             write_token((SolToken) obj);
@@ -116,110 +114,57 @@ void write_object(SolObject obj) {
                     exit(EXIT_FAILURE);
             }
             break;
-        case TYPE_SOL_FUNC:
-            write_function((SolFunction) obj);
-            break;
-        case TYPE_SOL_OBJ: {
-            SolString datatype = (SolString) sol_obj_get_prop(obj, "datatype");
-            char* datatype_str = datatype->value;
-            sol_obj_release((SolObject) datatype);
-            if (!strcmp(datatype_str, "object-literal")) {
-                write_object_literal(obj);
-                break;
-            }
-        }
-        case TYPE_SOL_OBJ_FROZEN:
-            if (((SolObjectFrozen) obj)->value->type_id == TYPE_SOL_LIST) {
-                write_list((SolList) ((SolObjectFrozen) obj)->value, true);
-            } else {
-                writec(0x8);
-                write_object(((SolObjectFrozen) obj)->value);
-            }
-            break;
         default:
             fprintf(stderr, "solc: error while emitting binary: unsupported object type\n");
             exit(EXIT_FAILURE);
     }
 }
 
-void write_list(SolList list, bool literal) {
-    writec(0x2);
+void write_list(SolList list) {
+    writec(0x1);
     writec(list->object_mode);
-    writec(literal);
     write_length(list->length);
     SOL_LIST_ITR(list) {
         write_object(list->current->value);
     }
 }
 
-void write_object_literal(SolObject obj) {
-    SolString parent = (SolString) sol_obj_get_prop(obj, "parent");
-    writec(0x1);
-    if (parent) {
-        char* parent_str = parent->value;
-        uint64_t parent_length = strlen(parent_str);
-        write_length(parent_length);
-        writes(parent_str, sizeof(*parent_str) * parent_length);
-        sol_obj_release((SolObject) parent);
-    } else {
-        write_length(0x0);
-    }
-    SolObject keys = sol_obj_get_prop(obj, "keys");
-    SolObject values = sol_obj_get_prop(obj, "values");
-    write_object(keys);
-    write_object(values);
-    sol_obj_release(keys);
-    sol_obj_release(values);
-}
-
-void write_function(SolFunction func) {
-    writec(0x3);
-    write_list(func->parameters, false);
-    write_list(func->statements, false);
-}
-
 void write_token(SolToken token) {
     // handle special cases
     // handle data types
     if (!strcmp(token->identifier, "true")) {
-        writec(0x7);
+        writec(0x5);
         writec(1);
         return;
     }
     if (!strcmp(token->identifier, "false")) {
-        writec(0x7);
+        writec(0x5);
         writec(0);
         return;
     }
     // otherwise write a token
-    writec(0x4);
+    writec(0x2);
     uint64_t length = strlen(token->identifier);
     write_length(length);
     writes(token->identifier, sizeof(*token->identifier) * length);
 }
 
 void write_string(SolString string) {
-    writec(0x6);
+    writec(0x4);
     uint64_t length = strlen(string->value);
     write_length(length);
     writes(string->value, sizeof(*string->value) * length);
 }
 
 void write_number(SolNumber number) {
-    writec(0x5);
-    // handle sign/exponent sign
-    char sign = 0x0;
-    // get the exponent
-    int exp;
-    double base = frexp(fabs(number->value), &exp);
-    if (exp >= 0) sign |= 0x1;
-    if (number->value >= 0) sign |= 0x2;
-    exp = abs(exp);
-    // get the base
-    base *= pow(FLT_RADIX, DBL_MANT_DIG);
-    uint64_t base_data = htonll(base);
-    // write the data
-    writec(sign);
-    write(base_data, sizeof(uint64_t));
-    write_length(exp);
+    writec(0x3);
+    // get the significand and exponent
+    int32_t exponent;
+    double fraction = frexp(number->value, &exponent);
+    int64_t significand = fraction * pow(2, 52);
+    
+    significand = htonll(significand);
+    exponent = htonl(exponent);
+    write(significand, sizeof(significand));
+    write(exponent, sizeof(exponent));
 }
