@@ -137,15 +137,17 @@ SolObject read_object() {
                 }
                 return (SolObject) read_object_literal(NULL);
             case '^': // FUNCTION SHORTHAND
-                if (*(src + 1) == '[' || *(src + 1) == '(' || *(src + 1) == '{') {
+                if (src[1] == '[' || src[1] == '(' || src[1] == '{'
+                        || (src[1] == '@' && src[2] == '[')) {
                     func_modifier = true;
                     src++;
                     continue;
                 }
                 return read_token();
             case '@': // OBJECT MODE STATEMENTS
-                if (*(src + 1) == '[' || *(src + 1) == '{') {
+                if (src[1] == '[' || src[1] == '{') {
                     obj_modifier = true;
+                    func_modifier = func_modifier_active;
                     src++;
                     continue;
                 }
