@@ -269,8 +269,8 @@ SolObject read_function_literal(SolList param_list) {
             sol_list_add_obj(result_list, (SolObject) sol_token_create("^"));
             sol_list_add_obj(result_list, (SolObject) param_list);
             sol_obj_release((SolObject) param_list);
-            SOL_LIST_ITR(statement_list) {
-                sol_list_add_obj(result_list, statement_list->current->value);
+            SOL_LIST_ITR(statement_list, current, i) {
+                sol_list_add_obj(result_list, current->value);
             }
             return (SolObject) result_list;
         }

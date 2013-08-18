@@ -28,8 +28,8 @@ unsigned char* solc_emit(SolList source, off_t* size) {
     out = tmpfile();
     
     writec('S'); writec('O'); writec('L'); writec('B'); writec('I'); writec('N');
-    SOL_LIST_ITR(source) {
-        write_object(source->current->value);
+    SOL_LIST_ITR(source, current, i) {
+        write_object(current->value);
     }
     writec(0x0);
     
@@ -124,8 +124,8 @@ void write_list(SolList list) {
     writec(0x1);
     writec(list->object_mode);
     write_length(list->length);
-    SOL_LIST_ITR(list) {
-        write_object(list->current->value);
+    SOL_LIST_ITR(list, current, i) {
+        write_object(current->value);
     }
 }
 
