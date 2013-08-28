@@ -3,6 +3,7 @@
 
 #include <math.h>
 #include <float.h>
+#include <arpa/inet.h>
 
 #define write(value, size) fwrite(&(value), (size), 1, out)
 #define writes(value, size) fwrite((value), (size), 1, out)

@@ -1,10 +1,14 @@
 # libsol cmake build file
-cmake_minimum_required(VERSION 2.6)
+cmake_minimum_required(VERSION 2.8)
 project(solc C)
 include_directories("${CMAKE_INSTALL_PREFIX}/include")
 
 # build for C99
 add_definitions(-std=c99)
+
+if(${UNIX})
+    add_definitions(-D_POSIX_C_SOURCE=200112)
+endif()
 
 # load extra modules
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
