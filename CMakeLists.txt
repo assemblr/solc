@@ -33,6 +33,8 @@ add_library(libsolc SHARED ${LIBSOLC_SOURCES} ${LIBSOLC_PUBLIC_HEADERS} ${LIBSOL
 set_target_properties(libsolc PROPERTIES OUTPUT_NAME solc)
 find_library(libsol sol)
 target_link_libraries(libsolc ${libsol})
+find_library(libm m)
+target_link_libraries(libsolc ${libm})
 
 add_executable(solc ${SOLC_SOURCES} ${SOLC_PUBLIC_HEADERS} ${SOLC_PRIVATE_HEADERS})
 target_link_libraries(solc libsolc)

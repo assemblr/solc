@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sys/types.h>
 
 #define cprint(...) fprintf(out, __VA_ARGS__)
 

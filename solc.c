@@ -1,4 +1,5 @@
 
+#include <sys/types.h>
 #include "solc.h"
 
 unsigned char* solc_compile(char* source, off_t* size) {

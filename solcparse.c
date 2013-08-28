@@ -3,6 +3,7 @@
 
 #include <string.h>
 #include <ctype.h>
+#include <sys/types.h>
 #include <sys/stat.h>
 #include <pcre.h>
 

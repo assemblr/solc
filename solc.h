@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <sol/runtime.h>
+#include <sys/types.h>
 
 SolList solc_parse(char* source);
 SolList solc_parse_f(FILE* source);
