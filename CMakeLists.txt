@@ -7,7 +7,7 @@ include_directories("${CMAKE_INSTALL_PREFIX}/include")
 add_definitions(-std=c99)
 
 if(${UNIX})
-    add_definitions(-D_POSIX_C_SOURCE=200112)
+    add_definitions(-D_POSIX_C_SOURCE=200809L)
 endif()
 
 # load extra modules
