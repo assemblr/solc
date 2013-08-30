@@ -12,7 +12,7 @@ static char* src;
 SolObject read_object();
 SolObject read_list(bool object_mode, bool frozen);
 SolObject read_object_literal(char* parent);
-SolObject read_function_literal(SolList param_list);
+SolObject read_function_literal(SolList param_list, bool macro);
 SolObject read_token();
 SolString read_string();
 SolNumber read_number();
@@ -70,17 +70,23 @@ SolList solc_parse(char* source) {
 
 SolObject read_object() {
     // handle special flags
-    bool func_modifier, obj_modifier;
+    bool func_modifier, macro_modifier, obj_modifier;
     SolToken obj_literal_parent;
     SolList func_literal_params;
     while (*src != '\0') {
         bool func_modifier_active = func_modifier;
+        bool macro_modifier_active = macro_modifier;
         bool obj_modifier_active = obj_modifier;
         SolToken obj_literal_parent_active = obj_literal_parent;
         SolList func_literal_params_active = func_literal_params;
-        func_modifier = obj_modifier = false;
+        func_modifier = macro_modifier = obj_modifier = false;
         obj_literal_parent = NULL;
         func_literal_params = NULL;
+        
+        // validate modifiers
+        if (func_modifier_active && macro_modifier_active) {
+            fprintf(stderr, "solc: error while parsing source: function and macro modifiers cannot be applied to the same object\n");
+        }
         
         // skip whitespace chars
         if (isspace(*src)) {
@@ -101,10 +107,14 @@ SolObject read_object() {
             case '"': // STRINGS
                 return (SolObject) read_string();
             case '(': // LISTS
-                if (func_modifier_active) {
+                if (func_modifier_active || macro_modifier_active) {
                     SolList list = (SolList) read_list(false, true);
                     if (*(src) == '{') {
-                        func_modifier = true;
+                        if (func_modifier_active) {
+                            func_modifier = true;
+                        } else {
+                            macro_modifier = true;
+                        }
                         func_literal_params = list;
                         continue;
                     }
@@ -113,9 +123,9 @@ SolObject read_object() {
                 }
                 return (SolObject) read_list(false, true);
             case '[': // STATEMENTS
-                if (func_modifier_active) {
+                if (func_modifier_active || macro_modifier_active) {
                     SolList func_list = (SolList) sol_obj_retain((SolObject) sol_list_create(false));
-                    sol_list_add_obj(func_list, (SolObject) sol_token_create("^"));
+                    sol_list_add_obj(func_list, (SolObject) sol_token_create(macro_modifier_active ? "#" : "^"));
                     SolList param_list = sol_list_create(false);
                     sol_list_add_obj(func_list, (SolObject) param_list);
                     sol_list_add_obj(param_list, (SolObject) sol_token_create("freeze"));
@@ -133,14 +143,22 @@ SolObject read_object() {
                     }
                     return (SolObject) read_object_literal("Object");
                 }
-                if (func_modifier_active) {
-                    return (SolObject) read_function_literal(func_literal_params_active ? func_literal_params_active : (SolList) nil);
+                if (func_modifier_active || macro_modifier_active) {
+                    return (SolObject) read_function_literal(func_literal_params_active ? func_literal_params_active : (SolList) nil, macro_modifier_active);
                 }
                 return (SolObject) read_object_literal(NULL);
             case '^': // FUNCTION SHORTHAND
                 if (src[1] == '[' || src[1] == '(' || src[1] == '{'
                         || (src[1] == '@' && src[2] == '[')) {
                     func_modifier = true;
+                    src++;
+                    continue;
+                }
+                return read_token();
+            case '#': // MACRO SHORTHAND
+                if (src[1] == '[' || src[1] == '(' || src[1] == '{'
+                    || (src[1] == '@' && src[2] == '[')) {
+                    macro_modifier = true;
                     src++;
                     continue;
                 }
@@ -247,7 +265,7 @@ SolObject read_object_literal(char* parent) {
     exit(EXIT_FAILURE);
 }
 
-SolObject read_function_literal(SolList param_list) {
+SolObject read_function_literal(SolList param_list, bool macro) {
     // advance past open delimiter
     src++;
     SolList statement_list = (SolList) sol_obj_retain((SolObject) sol_list_create(false));
@@ -262,7 +280,7 @@ SolObject read_function_literal(SolList param_list) {
         if (*src == '}') {
             src++;
             SolList result_list = (SolList) sol_obj_retain((SolObject) sol_list_create(false));
-            sol_list_add_obj(result_list, (SolObject) sol_token_create("^"));
+            sol_list_add_obj(result_list, (SolObject) sol_token_create(macro ? "#" : "^"));
             sol_list_add_obj(result_list, (SolObject) param_list);
             sol_obj_release((SolObject) param_list);
             SOL_LIST_ITR(statement_list, current, i) {
