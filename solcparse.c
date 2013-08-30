@@ -194,14 +194,9 @@ SolObject read_list(bool object_mode, bool frozen) {
         if (*src == (frozen ? ')' : ']')) {
             src++;
             if (frozen) {
-                SolList frozen = (SolList) sol_obj_retain((SolObject) sol_list_create(false));
-                sol_list_add_obj(frozen, (SolObject) sol_token_create("freeze"));
-                sol_list_add_obj(frozen, (SolObject) list);
-                sol_obj_release((SolObject) list);
-                return (SolObject) frozen;
-            } else {
-                return (SolObject) list;
+                sol_list_insert_object(list, (SolObject) sol_token_create("list"), 0);
             }
+            return (SolObject) list;
         }
         // add object
         SolObject object = read_object();
