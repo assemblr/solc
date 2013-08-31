@@ -27,7 +27,7 @@ char* file_modify_extension(char* file, char* ext);
 int main(int argc, char** argv) {
     // parse command-line flags
     char* filename;
-    bool flag_b, flag_c, flag_i;
+    bool flag_b = false, flag_c = false, flag_i = false;
     for (int i = 1; i < argc; i++) {
         char* arg = argv[i];
         if (*arg == '-') {

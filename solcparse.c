@@ -70,9 +70,9 @@ SolList solc_parse(char* source) {
 
 SolObject read_object() {
     // handle special flags
-    bool func_modifier, macro_modifier, obj_modifier;
-    SolToken obj_literal_parent;
-    SolList func_literal_params;
+    bool func_modifier = false, macro_modifier = false, obj_modifier = false;
+    SolToken obj_literal_parent = NULL;
+    SolList func_literal_params = NULL;
     while (*src != '\0') {
         bool func_modifier_active = func_modifier;
         bool macro_modifier_active = macro_modifier;
