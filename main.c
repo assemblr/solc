@@ -27,7 +27,7 @@ char* file_modify_extension(char* file, char* ext);
 int main(int argc, char** argv) {
     // parse command-line flags
     char* filename;
-    bool flag_b = false, flag_c = false, flag_i = false;
+    bool flag_b = false, flag_c = false, flag_e = false, flag_i = false;
     for (int i = 1; i < argc; i++) {
         char* arg = argv[i];
         if (*arg == '-') {
@@ -41,6 +41,9 @@ int main(int argc, char** argv) {
                             break;
                         case 'c':
                             flag_c = true;
+                            break;
+                        case 'e':
+                            flag_e = true;
                             break;
                         case 'i':
                             flag_i = true;
@@ -64,11 +67,11 @@ int main(int argc, char** argv) {
     
     // handle invalid input
     if (argc == 0 || !filename) {
-        printf("usage:  solc [-i] [-b|-c] filename\n");
+        printf("usage:  solc [-i] [-b|-c|-e] filename\n");
         return EXIT_FAILURE;
     }
-    if (flag_b && flag_c) {
-        fprintf(stderr, "Invalid flag combination: -c and -b.\n");
+    if ((int) flag_b + (int) flag_c + (int) flag_e > 1) {
+        fprintf(stderr, "Invalid flag combination: -c, -b, -e are exclusive.\n");
         return EXIT_FAILURE;
     }
     
@@ -86,7 +89,7 @@ int main(int argc, char** argv) {
     off_t bin_size;
     unsigned char* bin = solc_compile_f(in, &bin_size);
     fclose(in);
-    if (!flag_c) {
+    if (!flag_c && !flag_e) {
         char* bin_out_name = file_modify_extension(file_strip_path(filename), "solbin");
         FILE* bin_out = fopen(bin_out_name, "wb");
         fwrite(bin, bin_size, 1, bin_out);
@@ -95,12 +98,17 @@ int main(int argc, char** argv) {
     }
     
     // write C source file
-    if (!flag_b) {
+    if (!flag_b && !flag_e) {
         char* out_name = file_modify_extension(file_strip_path(filename), "c");
         FILE* out = flag_b ? NULL : fopen(out_name, "w");
         solc_generate_c(bin, bin_size, out);
         fclose(out);
         free(out_name);
+    }
+    
+    // execute program
+    if (flag_e) {
+        sol_runtime_execute(bin);
     }
     
     sol_runtime_destroy();
