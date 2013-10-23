@@ -121,7 +121,7 @@ SolObject read_object() {
                     fprintf(stderr, "solc: error while parsing source: function modifier found before frozen list\n");
                     exit(EXIT_FAILURE);
                 }
-                return (SolObject) read_list(false, true);
+                return (SolObject) read_list(obj_modifier_active, true);
             case '[': // STATEMENTS
                 if (func_modifier_active || macro_modifier_active) {
                     SolList func_list = (SolList) sol_obj_retain((SolObject) sol_list_create(false));
@@ -164,7 +164,7 @@ SolObject read_object() {
                 }
                 return read_token();
             case '@': // OBJECT MODE STATEMENTS
-                if (src[1] == '[' || src[1] == '{') {
+                if (src[1] == '[' || src[1] == '(' || src[1] == '{') {
                     obj_modifier = true;
                     func_modifier = func_modifier_active;
                     src++;
@@ -201,7 +201,7 @@ SolObject read_object() {
 SolObject read_list(bool object_mode, bool frozen) {
     // advance past open delimiter
     src++;
-    SolList list = (SolList) sol_obj_retain((SolObject) sol_list_create(object_mode));
+    SolList list = (SolList) sol_obj_retain((SolObject) sol_list_create((!frozen && object_mode) ? true : false));
     while (*src != '\0') {
         // skip whitespace characters
         if (isspace(*src)) {
@@ -212,7 +212,7 @@ SolObject read_list(bool object_mode, bool frozen) {
         if (*src == (frozen ? ')' : ']')) {
             src++;
             if (frozen) {
-                sol_list_insert_object(list, (SolObject) sol_token_create("list"), 0);
+                sol_list_insert_object(list, (SolObject) sol_token_create(object_mode ? "@list" : "list"), 0);
             }
             return (SolObject) list;
         }
@@ -293,7 +293,7 @@ SolObject read_function_literal(SolList param_list, bool macro) {
         sol_list_add_obj(statement_list, statement);
         sol_obj_release(statement);
     }
-    fprintf(stderr, "solc: error while parsing source: encountered unclosed object literal\n");
+    fprintf(stderr, "solc: error while parsing source: encountered unclosed function literal\n");
     exit(EXIT_FAILURE);
 }
 
